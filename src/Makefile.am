@@ -4,12 +4,14 @@ library_includedir=$(includedir)
 
 library_include_HEADERS = \
   bridge.h \
-  bridgeconst.h
+  bridgeconst.h \
+  serial.h
 
 lib_LTLIBRARIES = librelayrbridge.la
 librelayrbridge_la_SOURCES = \
   bridge.c \
-  crc.c
+  crc.c \
+  serial.c
 
 bin_PROGRAMS = \
   demo
@@ -21,4 +23,4 @@ demo_LDADD = librelayrbridge.la
 demo_LDFLAGS = -static
 
 check:
-	./demo$(EXEEXT)
+	./demo$(EXEEXT) /dev/ttyUSB0
