@@ -4,51 +4,66 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
+#define _POSIX_SOURCE 1
 
 #include "serial.h"
 
 void sersetoptions(int fd) {
-  struct termios options;
-  struct termios options22;
+  int ret;
+  struct termios config;
 
-  tcgetattr(fd, &options);
-
-  /*
-   * Baud rate 115200
-   */
-  cfsetispeed(&options, B115200);
-  cfsetospeed(&options, B115200);
+  ret = tcgetattr(fd, &config);
+  if (ret == -1) {
+    perror("tcgetattr");
+    exit(EXIT_FAILURE);
+  }
 
   /*
-   * Ignore modem control lines.
-   * Enable receiver.
+   *  Turn off input processing.
    */
-  options.c_cflag |= (CLOCAL | CREAD);
+  config.c_iflag &= ~(IGNBRK | BRKINT | ICRNL |
+                      INLCR | PARMRK | INPCK | ISTRIP | IXON);
 
   /*
-   * 8 bit not parity,  8N1
+   *  Turn off output processing.
    */
-  options.c_cflag &= ~PARENB;
-  options.c_cflag &= ~CSTOPB;
-  options.c_cflag &= ~CSIZE;
-  options.c_cflag |= CS8;
+  config.c_oflag = 0;
 
   /*
-   * set raw input, 1 second timeout
+   *  No line processing.
    */
-  options.c_cflag     |= (CLOCAL | CREAD);
-  options.c_lflag     &= ~(ICANON | ECHO | ECHOE | ISIG);
-  options.c_oflag     &= ~OPOST;
-  options.c_cc[VMIN]  = 0;
-  options.c_cc[VTIME] = 10;
+  config.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN | ISIG);
+
+  /*
+   *  Turn off character processing.
+   */
+  config.c_cflag &= ~(CSIZE | PARENB);
+  config.c_cflag |= CS8;
+
+  /*
+   *  Wait for a maximum of one second.
+   *  Inter-character timer off
+   */
+  config.c_cc[VMIN]  = 0;
+  config.c_cc[VTIME] = 10;
+
+  /*
+   * Set baud rate.
+   */
+  if(cfsetispeed(&config, B115200) == -1
+      || cfsetospeed(&config, B115200) == -1) {
+    perror("Baud rate not supported");
+    exit(EXIT_FAILURE);
+  }
 
   /*
    * set the options
    */
-  tcsetattr(fd, TCSANOW, &options);
+  tcsetattr(fd, TCSANOW, &config);
 }
 
 int seropen(const char *tty) {
@@ -57,6 +72,16 @@ int seropen(const char *tty) {
     perror("seropen");
     exit(EXIT_FAILURE);
   }
+
+  /*
+   * Check this is a serial device.
+   */
+  if(!isatty(fd)) {
+    fprintf(stderr, "%s is not a serial device\n", tty);
+    close(fd);
+    return -1;
+  }
+
 
   return fd;
 }
@@ -69,6 +94,10 @@ ssize_t serwrite(int fd, const uint8_t *buf, size_t count) {
   }
 
   return ret;
+}
+
+ssize_t serwriteb(int fd, const uint8_t byte) {
+  return serwrite(fd, &byte, 1);
 }
 
 ssize_t serread(int fd, uint8_t *buf, size_t count) {
